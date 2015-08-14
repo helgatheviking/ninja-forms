@@ -17,6 +17,7 @@ class NF_Notification_Email extends NF_Notification_Base_Type
 	 */
 	function __construct() {
 		$this->name = __( 'Email', 'ninja-forms' );
+		$this->supports_resend = true;
 	}
 
 	/**
@@ -224,14 +225,21 @@ class NF_Notification_Email extends NF_Notification_Base_Type
 	 * Process our Email notification
 	 *
 	 * @access public
+	 * @var int $id : notification ID
+	 * @var  int $sub_id : specific submission ID
 	 * @since 2.8
 	 * @return void
 	 */
-	public function process( $id ) {
+	public function process( $id, $sub_id = '' ) {
 		global $ninja_forms_processing;
 
-		$form_id 		= $ninja_forms_processing->get_form_ID();
-		$form_title 	= $ninja_forms_processing->get_form_setting( 'form_title' );
+		if( is_object( $ninja_forms_processing ) ){
+			$form_id 		= $ninja_forms_processing->get_form_ID();
+			$form_title 	= $ninja_forms_processing->get_form_setting( 'form_title' );
+		} else {
+			$form_id = Ninja_Forms()->notification( $id )->form_id;
+			$form_title = Ninja_Forms()->form( absint( $form_id ) )->get_setting( 'form_title' );
+		}
 
 		$email_format 	= Ninja_Forms()->notification( $id )->get_setting( 'email_format' );
 		$attach_csv 	= Ninja_Forms()->notification( $id )->get_setting( 'attach_csv' );
@@ -269,7 +277,8 @@ class NF_Notification_Email extends NF_Notification_Base_Type
             $subject = implode( ',', $subject );
         }
 
-		$message 		= $this->process_setting( $id, 'email_message' );
+		$message 		= $this->process_setting( $id, 'email_message', 0, $sub_id );
+
 		if ( is_array ( $message ) )
 			$message 	= $message[0];
 
@@ -312,40 +321,45 @@ class NF_Notification_Email extends NF_Notification_Base_Type
 			// Create our attachment
 
 			// Get our submission ID
-			$sub_id = $ninja_forms_processing->get_form_setting( 'sub_id' );
+			if( is_object( $ninja_forms_processing ) ) {
+				$sub_id = $ninja_forms_processing->get_form_setting( 'sub_id' );
+			} 
 
-			// create CSV content
-			$csv_content = Ninja_Forms()->sub( $sub_id )->export( true );
+			if( $sub_id ){
 
-			$upload_dir = wp_upload_dir();
-			$path = trailingslashit( $upload_dir['path'] );
+				// create CSV content
+				$csv_content = Ninja_Forms()->sub( $sub_id )->export( true );
 
-			// create temporary file
-			$path = tempnam( $path, 'Sub' );
-			$temp_file = fopen( $path, 'r+' );
+				$upload_dir = wp_upload_dir();
+				$path = trailingslashit( $upload_dir['path'] );
 
-			// write to temp file
-			fwrite( $temp_file, $csv_content );
-			fclose( $temp_file );
+				// create temporary file
+				$path = tempnam( $path, 'Sub' );
+				$temp_file = fopen( $path, 'r+' );
 
-			// find the directory we will be using for the final file
-			$path = pathinfo( $path );
-			$dir = $path['dirname'];
-			$basename = $path['basename'];
+				// write to temp file
+				fwrite( $temp_file, $csv_content );
+				fclose( $temp_file );
 
-			// create name for file
-			$new_name = apply_filters( 'ninja_forms_submission_csv_name', 'ninja-forms-submission' );
+				// find the directory we will be using for the final file
+				$path = pathinfo( $path );
+				$dir = $path['dirname'];
+				$basename = $path['basename'];
 
-			// remove a file if it already exists
-			if( file_exists( $dir.'/'.$new_name.'.csv' ) ) {
-				unlink( $dir.'/'.$new_name.'.csv' );
+				// create name for file
+				$new_name = apply_filters( 'ninja_forms_submission_csv_name', 'ninja-forms-submission' );
+
+				// remove a file if it already exists
+				if( file_exists( $dir.'/'.$new_name.'.csv' ) ) {
+					unlink( $dir.'/'.$new_name.'.csv' );
+				}
+
+				// move file
+				rename( $dir.'/'.$basename, $dir.'/'.$new_name.'.csv' );
+				$csv_attachment = $dir.'/'.$new_name.'.csv';
+
+				$attachments[] = $csv_attachment;
 			}
-
-			// move file
-			rename( $dir.'/'.$basename, $dir.'/'.$new_name.'.csv' );
-			$csv_attachment = $dir.'/'.$new_name.'.csv';
-
-			$attachments[] = $csv_attachment;
 		}
 
 		if ( is_array( $to ) AND !empty( $to ) ){
@@ -392,7 +406,7 @@ class NF_Notification_Email extends NF_Notification_Base_Type
 	 * @since 2.8
 	 * @return array $setting
 	 */
-	public function process_setting( $id, $setting, $html = 0 ) {
+	public function process_setting( $id, $setting, $html = 0, $sub_id = '' ) {
 
 		// save the setting name
 		$setting_name = $setting;
@@ -402,10 +416,10 @@ class NF_Notification_Email extends NF_Notification_Base_Type
 			$html = 1;
 
 		// call parent process setting method
-		$setting = parent::process_setting( $id, $setting, $html );
+		$setting = parent::process_setting( $id, $setting, $html, $sub_id );
 
 		// gotta keep the old filter in case anyone was using it.
-		return apply_filters( 'nf_email_notification_process_setting', $setting, $setting_name, $id );
+		return apply_filters( 'nf_email_notification_process_setting', $setting, $setting_name, $id, $sub_id );
 	}
 
 }

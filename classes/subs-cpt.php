@@ -76,6 +76,8 @@ class NF_Subs_CPT {
 
 		// Save our metabox values
 		add_action( 'save_post', array( $this, 'save_sub' ), 10, 2 );
+		add_action( 'ninja_forms_process_submission_meta', array( $this, 'save_sub_meta' ), 10, 2 );
+		add_action( 'ninja_forms_process_submission_meta', array( $this, 'process_sub_actions' ), 20, 2 );
 
 		// Save our hidden columns by form id.
 		add_action( 'wp_ajax_nf_hide_columns', array( $this, 'hide_columns' ) );
@@ -864,6 +866,8 @@ class NF_Subs_CPT {
 		add_meta_box( 'nf_fields', __( 'User Submitted Values', 'ninja-forms' ), array( $this, 'edit_sub_metabox' ), 'nf_sub', 'normal', 'default');
 		// Add our save field values metabox
 		add_meta_box( 'nf_fields_save', __( 'Submission Stats', 'ninja-forms' ), array( $this, 'save_sub_metabox' ), 'nf_sub', 'side', 'default');
+		// Add our actions metabox
+		add_meta_box( 'nf_actions', __( 'Submission Actions', 'ninja-forms' ), array( $this, 'actions_metabox' ), 'nf_sub', 'side', 'high');
 
 	}
 
@@ -1041,14 +1045,69 @@ class NF_Subs_CPT {
 	}
 
 	/**
-	 * Save our submission user values
+	 * Output our actions metabox to the CPT editing page.
+	 * 
+	 * @access public
+	 * @since 3.0
+	 * @return void
+	 */
+	public function actions_metabox( $post ) {
+
+		$form_id = Ninja_Forms()->sub( $post->ID )->form_id;
+		$form_title = Ninja_Forms()->form( $form_id )->get_setting( 'form_title' );
+
+ 		?>
+		<input type="hidden" name="nf_edit_sub" value="1">
+		<div class="submitbox" id="actionspost">
+			
+					<ul class="sub_actions submitbox">
+
+						<?php do_action( 'ninja_forms_submission_actions_start', $post->ID, $form_id ); ?>
+
+						<li class="wide" id="actions">
+							<select name="nf_sub_action">
+								<option value=""><?php _e( 'Actions', 'ninja-forms' ); ?></option>
+								<optgroup label="<?php esc_attr_e( 'Resend notification', 'ninja-forms' ); ?>">
+									<?php
+
+               						$notifications = (array)nf_get_notifications_by_form_id( $form_id, false );
+
+									foreach ( $notifications as $id ) {
+										if ( Ninja_Forms()->notification( $id )->supports_resend() && Ninja_Forms()->notification( $id )->active ) {
+											$action_name = Ninja_Forms()->notification( $id )->get_setting( 'name' );?>
+											<option value="send_notification_<?php echo esc_attr($id); ?>" ><?php echo $action_name; ?></option>
+											 <?php                   
+										}
+									}
+
+									?>
+								</optgroup>
+
+								<?php foreach( apply_filters( 'ninja_forms_submission_actions', array() ) as $action => $title ) { ?>
+									<option value="<?php echo $action; ?>"><?php echo $title; ?></option>
+								<?php } ?>
+							</select>
+
+							<button class="button nf-reload" title="<?php esc_attr_e( 'Apply', 'ninja-forms' ); ?>"><span><?php _e( 'Apply', 'ninja-forms' ); ?></span></button>
+						</li>
+
+						<?php do_action( 'ninja_forms_submission_actions_end', $post->ID, $form_id ); ?>
+
+					</ul>
+
+		</div>
+		<?php
+	}
+
+	/**
+	 * Save our submission post types
 	 * 
 	 * @access public
 	 * @since 2.7
 	 * @return void
 	 */
 	public function save_sub( $sub_id, $post ) {
-		global $pagenow;
+		global $pagenow, $ninja_forms_loading;
 
 		if ( ! isset ( $_POST['nf_edit_sub'] ) || $_POST['nf_edit_sub'] != 1 )
 			return $sub_id;
@@ -1071,12 +1130,64 @@ class NF_Subs_CPT {
 		if ( !current_user_can( $post_type->cap->edit_post, $sub_id ) )
 	    	return $sub_id;
 
-	    foreach ( $_POST['fields'] as $field_id => $user_value ) {
+	    // Instantiate our loading global singleton.
+		$ninja_forms_loading = new Ninja_Forms_Loading( Ninja_Forms()->sub( $sub_id )->form_id );
+
+	    do_action( 'ninja_forms_process_submission_meta', $sub_id, $post );
+
+	}
+
+	/**
+	 * Save our submission user values
+	 * 
+	 * @access public
+	 * @since 3.0
+	 * @return void
+	 */
+	function save_sub_meta( $sub_id, $post ){
+		foreach ( $_POST['fields'] as $field_id => $user_value ) {
 	    	$user_value = nf_wp_kses_post_deep( apply_filters( 'nf_edit_sub_user_value', $user_value, $field_id, $sub_id ) );
 	    	Ninja_Forms()->sub( $sub_id )->update_field( $field_id, $user_value );
 	    }
 
 	    set_transient( 'nf_sub_edit_ref', esc_url_raw( $_REQUEST['ref'] ) );
+	}
+
+	/**
+	 * Process actions
+	 * 
+	 * @access public
+	 * @since 3.0
+	 * @return void
+	 */
+	function process_sub_actions( $sub_id, $post ){
+
+		// Handle button actions
+		if ( ! empty( $_POST['nf_sub_action'] ) ) {
+
+			$action = sanitize_text_field( $_POST['nf_sub_action'] );
+
+			if ( strstr( $action, 'send_notification_' ) ) {
+
+				$notification_id = str_replace( 'send_notification_', '', $action );
+
+				do_action( 'nf_notification_before_process', $notification_id, $sub_id );	
+
+				if ( Ninja_Forms()->notification( $notification_id )->supports_resend() && Ninja_Forms()->notification( $notification_id )->active ) {
+					Ninja_Forms()->notification( $notification_id )->process( $sub_id );
+                }	
+
+				// Change the post saved message
+				//add_filter( 'redirect_post_location', array( __CLASS__, 'set_email_sent_message' ) );
+
+			} else {
+
+				if ( ! did_action( 'ninja_forms_order_action_' . sanitize_title( $notification_id ) ) ) {
+					do_action( 'ninja_forms_order_action_' . sanitize_title( $notification_id ), $sub_id );
+				}
+			}
+
+		}
 	}
 
 	/**

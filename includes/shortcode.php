@@ -32,6 +32,12 @@ function ninja_forms_field_shortcode( $atts ){
 		if( is_array( $value ) ){
 			$value = implode( ',', $value );
 		}
+	} elseif( isset( $atts['sub_id'] ) ){
+		$value = Ninja_Forms()->sub( $atts['sub_id'] )->get_field( $field_id );
+		$value = apply_filters( 'ninja_forms_field_shortcode', $value, $atts );
+		if( is_array( $value ) ){
+			$value = implode( ',', $value );
+		}
 	} else {
 		$value = '';
 	}
@@ -100,9 +106,9 @@ add_filter( 'nf_success_msg', 'nf_parse_sub_seq_num_shortcode', 10, 2 );
  * @return string $content
  */
 function nf_all_fields_shortcode( $atts, $content = '' ) {
-	global $ninja_forms_fields, $ninja_forms_processing;
+	global $ninja_forms_fields, $ninja_forms_processing, $ninja_forms_loading;
 
-	if ( ! isset ( $ninja_forms_processing ) )
+	if ( ! isset ( $ninja_forms_processing ) && ! isset( $atts['sub_id'] ) )
 		return false;
 
 	$html = isset ( $atts['html'] ) ? $atts['html'] : 1;
@@ -113,16 +119,36 @@ function nf_all_fields_shortcode( $atts, $content = '' ) {
 	} else {
 		$field_list = '';
 	}
-	foreach ( $ninja_forms_processing->get_all_fields() as $field_id => $user_value ) {
+
+	if( isset( $atts['sub_id'] )){
+		$fields = Ninja_Forms()->sub( $atts['sub_id'] )->get_all_fields();
+		$form_id = Ninja_Forms()->sub( $atts['sub_id'] )->form_id;
+	} else {
+		$fields = $ninja_forms_processing->get_all_fields();
+		$ninja_forms_processing->get_form_ID();
+	}
+
+	foreach ( $fields as $field_id => $user_value ) {
 		if ( ! $user_value )
 			continue;
 
-		$field = $ninja_forms_processing->get_field_settings( $field_id );
+		if( isset( $atts['sub_id'] ) ){
+			$field = $ninja_forms_loading->get_field_settings( $field_id );
+		} else {
+			$field = $ninja_forms_processing->get_field_settings( $field_id );
+		}
+		
 		$type = $field['type'];
 		if ( ! isset ( $ninja_forms_fields[ $type ] ) || ! $ninja_forms_fields[ $type ]['process_field'] )
 			continue;
 
-		$value = apply_filters( 'nf_all_fields_field_value', ninja_forms_field_shortcode( array( 'id' => $field_id ) ), $field_id );
+		$args = array( 'id' => $field_id );
+		if( isset( $atts['sub_id'] ) ){
+			$args['sub_id'] = $atts['sub_id'];
+		}
+
+		$value = apply_filters( 'nf_all_fields_field_value', ninja_forms_field_shortcode( $args ), $field_id );
+
 		$label = strip_tags( apply_filters( 'nf_all_fields_field_label', $field['data']['label'], $field_id ) );
 
 		if ( 1 == $html ) {
@@ -135,7 +161,7 @@ function nf_all_fields_shortcode( $atts, $content = '' ) {
 	if ( 1 == $html )
 		$field_list .= '</tbody></table>';
 
-	return apply_filters( 'nf_all_fields_table', $field_list, $ninja_forms_processing->get_form_ID() );
+	return apply_filters( 'nf_all_fields_table', $field_list, $form_id );
 
 }
 
@@ -147,10 +173,10 @@ add_shortcode( 'ninja_forms_all_fields', 'nf_all_fields_shortcode' );
  * @since 2.8.4
  * @return content
  */
-function nf_parse_fields_shortcode( $content ) {
+function nf_parse_fields_shortcode( $content, $sub_id = '' ) {
 	global $ninja_forms_processing;
 
-	if ( ! isset ( $ninja_forms_processing ) )
+	if ( ! isset ( $ninja_forms_processing ) && ! $sub_id )
 		return $content;
 
 	if ( is_array ( $content ) )
@@ -168,13 +194,17 @@ function nf_parse_fields_shortcode( $content ) {
 				if ( isset ( $matches[3][ $key ] ) ) {
 					$atts = shortcode_parse_atts( $matches[3][ $key ] );
 					$id = $atts['id'];
-					$value = $ninja_forms_processing->get_field_value( $id );
+					if( $sub_id ){
+						$value = Ninja_Forms()->sub($sub_id)->get_field( $id );
+					} else {
+						$value = $ninja_forms_processing->get_field_value( $id );
+					}
 					if( is_array( $value ) ){
 						$value = implode( ',', $value );
 					}
 					$content = str_replace( $matches[0][ $key ], $value, $content );
 				}
-			} else if ( 'ninja_forms_all_fields' == $shortcode ) {
+			} else if ( 'ninja_forms_all_fields' == $shortcode ) { die('ninja_forms_all_fields');
 				if ( isset ( $matches[3][ $key ] ) ) {
 					$atts = shortcode_parse_atts( $matches[3][ $key ] );
 					$content = str_replace( $matches[0][ $key ], nf_all_fields_shortcode( $atts, $content ), $content );

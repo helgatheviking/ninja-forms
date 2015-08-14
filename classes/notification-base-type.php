@@ -65,7 +65,7 @@ abstract class NF_Notification_Base_Type
 	 * @since 2.8
 	 * @return array $setting
 	 */
-	public function process_setting( $id, $setting, $html = 1 ) {
+	public function process_setting( $id, $setting, $html = 1, $sub_id = '' ) {
 		global $ninja_forms_processing;
 
 		$setting_name = $setting;
@@ -82,9 +82,17 @@ abstract class NF_Notification_Base_Type
 			}
 
 			if ( ! is_array ( $setting[ $x] ) ) {
+				
 				$setting[ $x ] = str_replace( '[ninja_forms_all_fields]', '[ninja_forms_all_fields html=' . $html . ']', $setting[ $x ] );
+
+				//add the submission id
+				if( $sub_id ){
+					$setting[ $x ] = str_replace( '[ninja_forms_all_fields', '[ninja_forms_all_fields sub_id=' . $sub_id, $setting[ $x ] );
+					$setting[ $x ] = str_replace( '[ninja_forms_field', '[ninja_forms_field sub_id=' . $sub_id, $setting[ $x ] );
+				}
+
 				$setting[ $x ] = do_shortcode( $setting[ $x ] );
-				$setting[ $x ] = nf_parse_fields_shortcode( $setting[ $x ] );				
+				$setting[ $x ] = nf_parse_fields_shortcode( $setting[ $x ], $sub_id );				
 			}
 
 		}

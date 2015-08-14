@@ -751,17 +751,20 @@ function nf_csv_attachment( $sub_id ){
 function nf_modify_attachments( $files, $n_id ) {
 	global $ninja_forms_processing;
 
-	if ( Ninja_Forms()->notification( $n_id )->get_setting( 'admin_email' ) ) {
-		if ( is_array( $ninja_forms_processing->get_form_setting( 'admin_attachments' ) ) ) {
-			$files = array_merge( $files, $ninja_forms_processing->get_form_setting( 'admin_attachments' ) );
+	if( is_object( $ninja_forms_processing ) ){
+		if ( Ninja_Forms()->notification( $n_id )->get_setting( 'admin_email' ) ) {
+			if ( is_array( $ninja_forms_processing->get_form_setting( 'admin_attachments' ) ) ) {
+				$files = array_merge( $files, $ninja_forms_processing->get_form_setting( 'admin_attachments' ) );
+			}
+		} else if ( Ninja_Forms()->notification( $n_id )->get_setting( 'user_email' ) ) {
+			if ( is_array( $ninja_forms_processing->get_form_setting( 'user_attachments' ) ) ) {
+				$files = array_merge( $files, $ninja_forms_processing->get_form_setting( 'user_attachments' ) );
+			}
 		}
-	} else if ( Ninja_Forms()->notification( $n_id )->get_setting( 'user_email' ) ) {
-		if ( is_array( $ninja_forms_processing->get_form_setting( 'user_attachments' ) ) ) {
-			$files = array_merge( $files, $ninja_forms_processing->get_form_setting( 'user_attachments' ) );
-		}
-	}
 
-	$ninja_forms_processing->update_form_setting( 'admin_attachments', '' );
+		$ninja_forms_processing->update_form_setting( 'admin_attachments', '' );
+
+	}
 	
 	return $files;
 }

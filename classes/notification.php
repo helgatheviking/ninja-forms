@@ -167,4 +167,16 @@ class NF_Notification
 		return Ninja_Forms()->notification_types[ $type ]->name;
 	}
 
+	/**
+	 * notification supports resend trigger
+	 * 
+	 * @access public
+	 * @since 3.0
+	 * @return string $supports_resend
+	 */
+	public function supports_resend() {
+		$type = $this->type;
+		return isset( Ninja_Forms()->notification_types[ $type ]->supports_resend ) ? Ninja_Forms()->notification_types[ $type ]->supports_resend : false;
+	}
+	
 }

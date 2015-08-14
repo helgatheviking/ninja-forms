@@ -465,20 +465,20 @@ function nf_get_object_type( $object_id ) {
  * @since 2.8
  * @return string $ip User's IP address
  */
-function nf_get_ip() {
+function nf_get_ip() { // add to aweber plugin!
 
-    $ip = '127.0.0.1';
+	$ip = '127.0.0.1';
 
-    if ( ! empty( $_SERVER['HTTP_CLIENT_IP'] ) ) {
-        //check ip from share internet
-        $ip = $_SERVER['HTTP_CLIENT_IP'];
-    } elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-        //to check ip is pass from proxy
-        $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
-    } elseif( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-        $ip = $_SERVER['REMOTE_ADDR'];
-    }
-    return apply_filters( 'nf_get_ip', $ip );
+	if ( ! empty( $_SERVER['HTTP_CLIENT_IP'] ) ) {
+		//check ip from share internet
+		$ip = $_SERVER['HTTP_CLIENT_IP'];
+	} elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+		//to check ip is pass from proxy
+		$ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
+	} elseif( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
+		$ip = $_SERVER['REMOTE_ADDR'];
+	}
+	return apply_filters( 'nf_get_ip', $ip );
 }
 
 
